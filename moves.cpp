@@ -5,6 +5,7 @@
 #include<vector>
 #include"magic.hpp"
 #include"moves.hpp"
+
 //Welcome to fizzle engine
 //I can't remember why they are named Pieces_B and I am too afraid to change it
 typedef struct Pieces_B Pieces_B;
@@ -93,20 +94,19 @@ void Board_State::Get_All_Moves(){
     uint64_t all_positions = Get_Board();
     uint_fast16_t count = 0;
     uint64_t position = 1;
-    //First 6 bits are origin
-    //Second 6 are the destination
-    //Last 4 are for the movetype
-    uint_fast16_t move;
     while(white_positions != 0){
         if ((white_positions & 1) == 1){
             //There is a white piece here.
             if ((White.Pawns >> count) & 1 == 1){
+                //One forward
                 if ((all_positions & (position << 8)) == 0){
                     Add_Move(count,count + 8,0);
                 }
+                //Two forward
                 if ((all_positions & (position << 16)) == 0 && (count / 8) == 1){
                     Add_Move(count,count + 16,0);
                 }
+                //One forward and left/right
                 if (black_positions & (position << 9) == 1){
                     Add_Move(count,count + 9,1);
                 }
@@ -127,6 +127,7 @@ void Board_State::Get_All_Moves(){
 
 void Board_State::Add_Move(uint_fast16_t origin,uint_fast16_t destination,uint_fast16_t type){
     //Resize in chunks of 32 as of now.
+    //Average chess position is about 30 moves
     if (MoveIndex % 32 == 0){
         Moves.resize(MoveIndex + 32);
     }

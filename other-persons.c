@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define USE_32_BIT_MULTIPLICATIONS
+//#define USE_32_BIT_MULTIPLICATIONS
 
 typedef unsigned long long uint64;
 

@@ -113,7 +113,7 @@ void add_rook_moves(std::unordered_map<uint_fast16_t,uint64_t>* rMoves,int x,int
   int position = y * 8 + x;
   uint64_t mask;
   uint_fast16_t key;
-  int count = 0;
+  //int count = 0;
   for (int l = 0; l < (1 << x);l++){
       for (int r = 0; r < (1 << (7 - x));r++){
           for (int d = 0; d < (1 << y);d++){
@@ -124,11 +124,11 @@ void add_rook_moves(std::unordered_map<uint_fast16_t,uint64_t>* rMoves,int x,int
                   if (rMoves[position].find(key) == rMoves[position].end()){
                     rMoves[position][key] = rook_attack(mask,x,y);
                   }
-                  else{
-                    if (rMoves[position][key] != rook_attack(mask,x,y)){
-                      count++;
-                    }
-                  }
+                  // else{
+                  //   if (rMoves[position][key] != rook_attack(mask,x,y)){
+                  //     count++;
+                  //   }
+                  // }
                 }
               }
           }
@@ -140,7 +140,7 @@ void add_bishop_moves(std::unordered_map<uint_fast16_t,uint64_t>* bMoves,int x,i
   int position = y * 8 + x;
   uint64_t mask;
   uint_fast16_t key;
-  int count = 0;
+  //int count = 0;
   for (int ld = 0; ld < (1 << std::min(x,y));ld++){
     for (int lu = 0; lu < (1 << std::min(x,7- y));lu++){
       for (int rd = 0; rd < (1 << std::min(7 - x, y));rd++){
@@ -150,11 +150,11 @@ void add_bishop_moves(std::unordered_map<uint_fast16_t,uint64_t>* bMoves,int x,i
           if (bMoves[position].find(key) == bMoves[position].end()){
             bMoves[position][key] = bishop_attack(mask,x,y);
           }
-          else{
-            if (bMoves[position][key] != rook_attack(mask,x,y)){
-              count++;
-            }
-          }
+          // else{
+          //   if (bMoves[position][key] != bishop_attack(mask,x,y)){
+          //     count++;
+          //   }
+          // }
         }
       }
     }
@@ -175,34 +175,42 @@ void add_bishop_moves(std::unordered_map<uint_fast16_t,uint64_t>* bMoves,int x,i
 
 
 int main(){
-    std::unordered_map<uint_fast16_t,uint64_t> rMoves[64];
-    std::unordered_map<uint_fast16_t,uint64_t> bMoves[64];
-    for (int x = 0; x < 8; x++){
-        for (int y = 0; y < 8; y++){
-            add_rook_moves(rMoves,x,y);
-            add_bishop_moves(bMoves,x,y);
-        }
-    }
-    int TotalSize = 0;
-    for(int i = 0; i < 64; i++){
-      std::cout << "The size is " << rMoves[i].size() << std::endl;
-      TotalSize += rMoves[i].size();
-    }
-    std::cout << TotalSize << std::endl;
+  //A 64 bit integer where all the edge parts of the board are 1
+  uint64_t EDGES = 0xff818181818181ffULL;
+  std::unordered_map<uint_fast16_t,uint64_t> rMoves[64];
+  std::unordered_map<uint_fast16_t,uint64_t> bMoves[64];
+  uint64_t rMask[64];
+  uint64_t bMask[64];
+  //Generating all the things we need
+  for (int x = 0; x < 8; x++){
+      for (int y = 0; y < 8; y++){
+          add_rook_moves(rMoves,x,y);
+          add_bishop_moves(bMoves,x,y);
+          rMask[y*8 + x] = rook_attack(0,x,y) ^ EDGES;
+          bMask[y*8 + x] = bishop_attack(0,x,y) ^ EDGES;
+      }
+  }
+  int TotalSize = 0;
+  for(int i = 0; i < 64; i++){
+    std::cout << "The size is " << rMoves[i].size() << std::endl;
+    TotalSize += rMoves[i].size();
+  }
+  std::cout << TotalSize << std::endl;
 
-    TotalSize = 0;
-    for(int i = 0; i < 64; i++){
-      std::cout << "The size is " << bMoves[i].size() << std::endl;
-      TotalSize += bMoves[i].size();
-    }
-    //std::cout << TotalSize << std::endl;
-    // int test = (10 * RMagic[0]) >> 52;
-    // std::cout << rMoves[0][test] << std::endl;
-    // std::cout << rMoves[0][0] << std::endl;
-    //std::cout << rMoves[0][test] << std::endl;
-    // for (int i = 0; i < 1000; i++){
-    //   std::cout << rMoves[0][i] << std::endl;
-    // }
-    //std::cout << rook_attack(0,1,0) << std::endl;
-    //std::cout << add_ones_rook(5,10,15,20,3,3) << std::endl;
+  TotalSize = 0;
+  for(int i = 0; i < 64; i++){
+    std::cout << "The size is " << bMoves[i].size() << std::endl;
+    TotalSize += bMoves[i].size();
+  }
+  std::cout << TotalSize << std::endl;
+  // int test = (10 * RMagic[0]) >> 52;
+  // std::cout << rMoves[0][test] << std::endl;
+  // std::cout << rMoves[0][0] << std::endl;
+  //std::cout << rMoves[0][test] << std::endl;
+  // for (int i = 0; i < 1000; i++){
+  //   std::cout << rMoves[0][i] << std::endl;
+  // }
+  //std::cout << rook_attack(0,1,0) << std::endl;
+  //std::cout << add_ones_rook(5,10,15,20,3,3) << std::endl;
+  //std::cout << bishop_attack(0,3,3) << std::endl;
 }

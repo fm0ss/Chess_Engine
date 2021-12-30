@@ -1,17 +1,5 @@
-#include<iostream>
 #include<stdint.h>
-#include"magic.hpp"
-#include <chrono>
-
-
-int test_func(uint64_t x){
-    int c = 0;
-    while(x != 0){
-        x >>= 1;
-        c++;
-    }
-    return c;
-}
+#include<DeBruijn.hpp>
 
 uint64_t isolate_lsb(uint64_t x){
     return x & -x;
@@ -33,11 +21,4 @@ int DeBruijn(uint64_t x){
     x *= DEBRUIJN_CONSTANT;
     x >>= 58;
     return convert[x];
-}
-
-int main(){
-    // std::cout << ((2147483656 * RMagic[0]) >> (64 - RBits[0])) << std::endl;
-    // std::cout << (512 * BMagic[0]) << std::endl;
-    test_func(1231231);
-    return 0;
 }

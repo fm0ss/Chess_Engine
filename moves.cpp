@@ -3,8 +3,17 @@
 #include<string>
 #include<cctype>
 #include<vector>
+#include<unordered_map>
 #include"magic.hpp"
 #include"moves.hpp"
+#include"move-database.hpp"
+
+
+//Important globals to be used throughout
+std::unordered_map<uint_fast16_t,uint64_t>* rMoves;
+std::unordered_map<uint_fast16_t,uint64_t>* bMoves;
+uint64_t* rMask;
+uint64_t* bMask;
 
 //Welcome to fizzle engine
 //I can't remember why they are named Pieces_B and I am too afraid to change it
@@ -90,10 +99,13 @@ uint64_t Board_State::Get_Board(){
 
 void Board_State::Get_All_Moves(){
     uint64_t white_positions = Get_All_Pieces(&White);
+    uint64_t white_positions_copy = white_positions;
     uint64_t black_positions = Get_All_Pieces(&Black);
     uint64_t all_positions = Get_Board();
     uint_fast16_t count = 0;
     uint64_t position = 1;
+    uint64_t moves;
+    uint64_t blockers;
     while(white_positions != 0){
         if ((white_positions & 1) == 1){
             //There is a white piece here.
@@ -115,7 +127,9 @@ void Board_State::Get_All_Moves(){
                 }
             }
             else if ((White.Bishops >> count) & 1 == 1){
-                
+                blockers = bMask[count] & black_positions;
+                moves = bMoves[count][(blockers * BMagic[count]) >> (64 - BBits[count])];
+                moves = moves ^ white_positions_copy;
             }
         }
         //Bitshifts everywhere yet I still can't remember which is which
@@ -138,8 +152,12 @@ void Board_State::Add_Move(uint_fast16_t origin,uint_fast16_t destination,uint_f
 
 int main(){
     //Board_State test("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR");
+    MoveData* ans = get_move_data();
+    rMask = ans->rMask;bMask = ans->bMask;
+    rMoves = ans->rMoves;bMoves = ans->bMoves;
     Board_State test;
     test.Get_All_Moves();
+    std::cout << test.Black.Bishops << std::endl;
     // for(int i = 0; i < test.MoveIndex;i++){
     //     std::cout << test.Moves[i] << std::endl;
     // }

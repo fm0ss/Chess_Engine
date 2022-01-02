@@ -26,6 +26,13 @@ class Board_State{
         static void Print_Colour(Pieces_B*);
         static uint64_t Get_All_Pieces(Pieces_B*);
         uint64_t Get_Board();
-        void Get_All_Moves();
+        void Get_All_Moves_White();
+        void Gen_Rook_Moves(Pieces_B*,Pieces_B*);
+        void Gen_Bishop_Moves(Pieces_B*,Pieces_B*);
+        void Gen_Queen_Moves(Pieces_B*,Pieces_B*);
+        void Gen_White_Pawn_Moves();
+        void Gen_Black_Pawn_Moves();
         void Add_Move(uint_fast16_t,uint_fast16_t,uint_fast16_t);
+        void Board_State::Add_Moves(int pos, uint64_t moves,Pieces_B* other);
+        void Board_State::Add_Moves_Sub(int type,int pos, uint64_t moves);
 };

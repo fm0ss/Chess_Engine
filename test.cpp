@@ -41,3 +41,17 @@ int main(){
     test_func(1231231);
     return 0;
 }
+
+void LoopThroughInt(uint64_t integer){
+    //start at position 0
+    int pos = 0;
+    int lsb;
+    while(integer != 0){
+        lsb = DeBruijn(integer);
+        pos += lsb;
+        //Do something with pos here
+
+        //Now the integer is shifted
+        integer >>= lsb + 1;
+    }
+}

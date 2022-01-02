@@ -8,9 +8,14 @@
 //So much pain was had in this file
 
 uint64_t cartesian_to_int(int x, int y){
+  //This is only needed for the knight generation
+  //EDIT also for king move generation
+  if (x < 8 && x >= 0 && y < 8 && y >= 0){
     uint64_t result = 1;
     result <<= (y * 8 + x);
     return result;
+  }
+  return 0;
 }
 
 uint64_t add_ones_bishop(int ld, int lu, int rd, int ru, int x, int y){
@@ -174,6 +179,31 @@ void add_bishop_moves(std::unordered_map<uint_fast16_t,uint64_t>* bMoves,int x,i
 //   })
 // }
 
+uint64_t knight_attack(int x, int y){
+  uint64_t result = 0;
+  result |= cartesian_to_int(x + 2, y + 1);
+  result |= cartesian_to_int(x + 2, y - 1);
+  result |= cartesian_to_int(x - 2, y + 1);
+  result |= cartesian_to_int(x - 2, y - 1);
+  result |= cartesian_to_int(x + 1, y + 2);
+  result |= cartesian_to_int(x + 1, y - 2);
+  result |= cartesian_to_int(x - 1, y + 2);
+  result |= cartesian_to_int(x - 1, y - 2);
+  return result;
+}
+
+uint64_t king_attack(int x, int y){
+  uint64_t result = 0;
+  result |= cartesian_to_int(x + 1, y);
+  result |= cartesian_to_int(x + 1, y + 1);
+  result |= cartesian_to_int(x + 1, y - 1);
+  result |= cartesian_to_int(x - 1, y);
+  result |= cartesian_to_int(x - 1, y + 1);
+  result |= cartesian_to_int(x - 1, y - 1);
+  result |= cartesian_to_int(x, y + 1);
+  result |= cartesian_to_int(x, y - 1);
+}
+
 
 MoveData* get_move_data(){
   //A 64 bit integer where all the edge parts of the board are 1
@@ -185,6 +215,8 @@ MoveData* get_move_data(){
           add_bishop_moves(ans->bMoves,x,y);
           ans->rMask[y*8 + x] = rook_attack(0,x,y) ^ EDGES;
           ans->bMask[y*8 + x] = bishop_attack(0,x,y) ^ EDGES;
+          ans->knMoves[y*8 + x] = knight_attack(x,y);
+          ans->kiMoves[y*8 + x] = king_attack(x,y);
       }
   }
   return ans;

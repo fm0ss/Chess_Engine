@@ -32,6 +32,9 @@ class Board_State{
         void Gen_Queen_Moves(Pieces_B*,Pieces_B*);
         void Gen_White_Pawn_Moves();
         void Gen_Black_Pawn_Moves();
+        void Gen_White_Moves();
+        void Gen_Black_Moves();
+        void Gen_Sliding_Moves(Pieces_B* colour,Pieces_B* other,uint64_t piece,std::unordered_map<uint_fast16_t,uint64_t>* Moves,uint64_t* Magic, uint64_t* Bits,uint64_t* Mask);
         void Add_Move(uint_fast16_t,uint_fast16_t,uint_fast16_t);
         void Board_State::Add_Moves(int pos, uint64_t moves,Pieces_B* other);
         void Board_State::Add_Moves_Sub(int type,int pos, uint64_t moves);

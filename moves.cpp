@@ -105,6 +105,7 @@ void Board_State::Add_Moves_Sub(int type,int from, uint64_t moves){
         lsb = DeBruijn(moves);
         pos += lsb;
         Add_Move(from,pos,type);
+        moves >>= lsb + 1;
     }
 }
 
@@ -114,6 +115,24 @@ void Board_State::Add_Moves(int from, uint64_t moves, Pieces_B* other){
     Add_Moves_Sub(1,from,attacks);
     //Ading normal moves
     Add_Moves_Sub(0,from,attacks ^ moves);
+}
+
+void Board_State::Gen_Sliding_Moves(Pieces_B* colour,Pieces_B* other,uint64_t piece,std::unordered_map<uint_fast16_t,uint64_t>* Moves,uint64_t* Magic, uint64_t* Bits,uint64_t* Mask){
+    uint64_t our_pieces = Get_All_Pieces(colour);
+    uint64_t all_blockers = Get_Board();
+    uint64_t blockers;
+    uint64_t moves;
+    int pos = 0;
+    int lsb;
+    while(piece != 0){
+        lsb = DeBruijn(piece);
+        pos += lsb;
+        blockers = Mask[pos] & all_blockers;
+        moves = Moves[pos][(blockers * Magic[pos]) >> (64 - Bits[pos])];
+        moves = moves ^ our_pieces;
+        Add_Moves(pos,moves,other);
+        piece >>= lsb + 1;
+    }
 }
 
 void Board_State::Gen_Rook_Moves(Pieces_B* colour,Pieces_B* other){
@@ -165,7 +184,7 @@ void Board_State::Gen_White_Pawn_Moves(){
     uint64_t black_positions = Get_All_Pieces(&Black);
     uint64_t position;
     int pos = 0;
-    int lsb ;
+    int lsb;
     while(pawns != 0){
         lsb = DeBruijn(pawns);
         pos += lsb;
@@ -216,6 +235,21 @@ void Board_State::Gen_Black_Pawn_Moves(){
         pawns >>= lsb + 1;
     }
 }
+
+void Board_State::Gen_White_Moves(){
+    Gen_Queen_Moves(&White,&Black);
+    Gen_Rook_Moves(&White,&Black);
+    Gen_Bishop_Moves(&White,&Black);
+    Gen_White_Pawn_Moves();
+}
+
+void Board_State::Gen_Black_Moves(){
+    Gen_Queen_Moves(&Black,&White);
+    Gen_Rook_Moves(&Black,&White);
+    Gen_Bishop_Moves(&Black,&White);
+    Gen_Black_Pawn_Moves();
+}
+
 
 
 void Board_State::Add_Move(uint_fast16_t origin,uint_fast16_t destination,uint_fast16_t type){

@@ -1,280 +1,315 @@
-#include<iostream>
-#include<stdint.h>
-#include<string>
-#include<cctype>
-#include<vector>
-#include<unordered_map>
-#include"magic.hpp"
 #include"moves.hpp"
-#include"move-database.hpp"
-#include"DeBruijn.hpp"
 
+//todo
+//1. Make things pass by reference as appropriate
+//2. Go from psuedo legal to legal
 
-//Important globals to be used throughout
-std::unordered_map<uint_fast16_t,uint64_t>* rMoves;
-std::unordered_map<uint_fast16_t,uint64_t>* bMoves;
-uint64_t* rMask;
-uint64_t* bMask;
-
-//Welcome to fizzle engine
-//I can't remember why they are named Pieces_B and I am too afraid to change it
+//Naming convention use lower case for all locals/args and Caps for everything else
 typedef struct Pieces_B Pieces_B;
 typedef struct Move Move;
 
-//I make fast code, not good code.
 // Struct to represent positions of each colour's pieces on a bitboard.
 //The four different types of moves.
 enum MoveType {Normal,Capture,EnPassant,Castling};
 
 
+void Pieces_B::generate_bitboards(){
+    all_bitboards.push_back(&rooks);
+    all_bitboards.push_back(&bishops);
+    all_bitboards.push_back(&queens);
+    all_bitboards.push_back(&king);
+    all_bitboards.push_back(&pawns);
+    all_bitboards.push_back(&knights);
+}
+
+
 //Initialise Board to position with Fen notation
-Board_State::Board_State(std::string Fen){
+Board_State::Board_State(std::string fen,MoveData* move_database, Magics* magic_numbers){
     //Change rank is bitshift by 8, Change file by bitshift of one
     //O(length of Fen)
+    white.generate_bitboards();
+    black.generate_bitboards();
+    this->move_database = move_database;
+    this->magic_numbers = magic_numbers;
     uint64_t position = 1;
     position <<= 63;
-    for (auto &c : Fen){
+    for (auto &c : fen){
         if (isdigit(c)){
             position >>= (c - '0');
         }
-        //At this point in time I am pretending forward slashes don't exist and I can't see why it would be a problem
         else if (c != '/'){
-            //I know this is disgusting but it is definitely not slow
             switch(c){
                 case 'p':
-                    Black.Pawns = Black.Pawns | position;break;
+                    black.pawns = black.pawns | position;break;
                 case 'P':
-                    White.Pawns = White.Pawns | position;break;
+                    white.pawns = white.pawns | position;break;
                 case 'r':
-                    Black.Rooks = Black.Rooks | position;break;
+                    black.rooks = black.rooks | position;break;
                 case 'R':
-                    White.Rooks = White.Rooks | position;break;
+                    white.rooks = white.rooks | position;break;
                 case 'q':
-                    Black.Queens = Black.Queens | position;break;
+                    black.queens = black.queens | position;break;
                 case 'Q':
-                    White.Queens = White.Queens | position;break;
+                    white.queens = white.queens | position;break;
                 case 'b':
-                    Black.Bishops = Black.Bishops | position;break;
+                    black.bishops = black.bishops | position;break;
                 case 'B':
-                    White.Bishops = White.Bishops | position;break;
+                    white.bishops = white.bishops | position;break;
                 case 'n':
-                    Black.Knights = Black.Knights | position;break;
+                    black.knights = black.knights | position;break;
                 case 'N':
-                    White.Knights = White.Knights | position;break;
+                    white.knights = white.knights | position;break;
                 case 'k':
-                    Black.King = Black.King | position;break;
+                    black.king = black.king | position;break;
                 case 'K':
-                    White.King = White.King | position;break;
+                    white.king = white.king | position;break;
             }
             position >>= 1;
         }
     }
 }
 
+
 //Just for debugging
-void Board_State::Print_Colour(Pieces_B* colour){
-    std::cout << colour->Bishops << " Bishops" << std::endl;
-    std::cout << colour->Pawns << " Pawns" << std::endl;
-    std::cout << colour->Rooks << " Rooks" << std::endl;
-    std::cout << colour->Knights << " Knights" << std::endl;
-    std::cout << colour->Queens << " Queens" << std::endl;
-    std::cout << colour->King << " King" << std::endl;
+void Board_State::print_colour(Pieces_B* colour){
+    std::cout << colour->bishops << " bishops" << std::endl;
+    std::cout << colour->pawns << " pawns" << std::endl;
+    std::cout << colour->rooks << " rooks" << std::endl;
+    std::cout << colour->knights << " knights" << std::endl;
+    std::cout << colour->queens << " queens" << std::endl;
+    std::cout << colour->king << " king" << std::endl;
 }
 
 //Also just for debugging
-void Board_State::Print_Bitboard(){
-    std::cout << "White" << std::endl;
-    Print_Colour(&White);
-    std::cout << "Black" << std::endl;
-    Print_Colour(&Black);
+void Board_State::print_bitboard(){
+    std::cout << "white" << std::endl;
+    print_colour(&white);
+    std::cout << "black" << std::endl;
+    print_colour(&black);
 }
 
 //Starting to see the utility of bitboards
-uint64_t Board_State::Get_All_Pieces(Pieces_B* colour){
-    return colour->Bishops | colour->Pawns | colour->Rooks | colour->Knights | colour->Queens | colour->King;
+uint64_t Board_State::get_all_pieces(Pieces_B* colour){
+    return colour->bishops | colour->pawns | colour->rooks | colour->knights | colour->queens | colour->king;
 }
 
-uint64_t Board_State::Get_Board(){
-    return Get_All_Pieces(&Black) | Get_All_Pieces(&White);
+uint64_t Board_State::get_board(){
+    return get_all_pieces(&black) | get_all_pieces(&white);
 }
 
-void Board_State::Add_Moves_Sub(int type,int from, uint64_t moves){
+void Board_State::add_moves_sub(int type,int from, uint64_t moves){
     int lsb;
-    int pos = 0;
+    int pos = -1;
     while(moves != 0){
-        lsb = DeBruijn(moves);
-        pos += lsb;
-        Add_Move(from,pos,type);
+        lsb = debruijn(moves);
+        pos += lsb + 1;
+        add_move(from,pos,type);
         moves >>= lsb + 1;
     }
 }
 
-void Board_State::Add_Moves(int from, uint64_t moves, Pieces_B* other){
-    uint64_t attacks = moves & Get_All_Pieces(other);
+void Board_State::add_moves(int from, uint64_t moves, Pieces_B* other){
+    uint64_t attacks = moves & get_all_pieces(other);
     //Adding attack moves
-    Add_Moves_Sub(1,from,attacks);
-    //Ading normal moves
-    Add_Moves_Sub(0,from,attacks ^ moves);
+    add_moves_sub(1,from,attacks);
+    //Adding normal moves
+    add_moves_sub(0,from,attacks ^ moves);
 }
 
-void Board_State::Gen_Sliding_Moves(Pieces_B* colour,Pieces_B* other,uint64_t piece,std::unordered_map<uint_fast16_t,uint64_t>* Moves,uint64_t* Magic, uint64_t* Bits,uint64_t* Mask){
-    uint64_t our_pieces = Get_All_Pieces(colour);
-    uint64_t all_blockers = Get_Board();
+void Board_State::gen_sliding_moves(Pieces_B* colour,Pieces_B* other,uint64_t piece,std::unordered_map<uint_fast16_t,uint64_t>* Moves,const uint64_t* Magic,const int* Bits,uint64_t* Mask){
+    uint64_t our_pieces = get_all_pieces(colour);
+    uint64_t all_blockers = get_board();
     uint64_t blockers;
     uint64_t moves;
-    int pos = 0;
+    int pos = -1;
     int lsb;
     while(piece != 0){
-        lsb = DeBruijn(piece);
-        pos += lsb;
+        lsb = debruijn(piece);
+        pos += lsb + 1;
         blockers = Mask[pos] & all_blockers;
         moves = Moves[pos][(blockers * Magic[pos]) >> (64 - Bits[pos])];
-        moves = moves ^ our_pieces;
-        Add_Moves(pos,moves,other);
+        //So we don't take our own pieces
+        moves = (moves & ~our_pieces);
+        add_moves(pos,moves,other);
         piece >>= lsb + 1;
     }
 }
 
-void Board_State::Gen_Rook_Moves(Pieces_B* colour,Pieces_B* other){
-    uint64_t our_pieces = Get_All_Pieces(colour);
-    uint64_t rooks = colour->Rooks;
-    uint64_t all_blockers = Get_Board();
-    uint64_t blockers;
+void Board_State::gen_rook_moves(Pieces_B* colour,Pieces_B* other){
+    gen_sliding_moves(colour,other,colour->rooks,move_database->r_moves,magic_numbers->r_magic,magic_numbers->r_bits,move_database->r_mask);
+}
+
+void Board_State::gen_bishop_moves(Pieces_B* colour,Pieces_B* other){
+    gen_sliding_moves(colour,other,colour->bishops,move_database->b_moves,magic_numbers->b_magic,magic_numbers->b_bits,move_database->b_mask);
+}
+
+void Board_State::gen_queen_moves(Pieces_B* colour,Pieces_B* other){
+    gen_sliding_moves(colour,other,colour->queens,move_database->b_moves,magic_numbers->b_magic,magic_numbers->b_bits,move_database->b_mask);
+    gen_sliding_moves(colour,other,colour->queens,move_database->r_moves,magic_numbers->r_magic,magic_numbers->r_bits,move_database->r_mask);
+}
+
+void Board_State::gen_k_moves(Pieces_B* colour,Pieces_B* other,uint64_t piece,uint64_t* move_lookup){
     uint64_t moves;
-    int pos = 0;
+    uint64_t our_pieces = get_all_pieces(colour);
+    int pos = -1;
     int lsb;
-    while(rooks != 0){
-        lsb = DeBruijn(rooks);
-        pos += lsb;
-        blockers = rMask[pos] & all_blockers;
-        moves = rMoves[pos][(blockers * RMagic[pos]) >> (64 - RBits[pos])];
-        moves = moves ^ our_pieces;
-        Add_Moves(pos,moves,other);
-        rooks >>= lsb + 1;
+    while(piece != 0){
+        lsb = debruijn(piece);
+        pos += lsb + 1;
+        moves = move_lookup[pos];
+        //So we don't take our own pieces
+        moves = (moves & ~our_pieces);
+        add_moves(pos,moves,other);
+        piece >>= lsb + 1;
     }
 }
 
-void Board_State::Gen_Bishop_Moves(Pieces_B* colour,Pieces_B* other){
-    uint64_t our_pieces = Get_All_Pieces(colour);
-    uint64_t bishops = colour->Bishops;
-    uint64_t all_blockers = Get_Board();
-    uint64_t blockers;
-    uint64_t moves;
-    int pos = 0;
-    int lsb;
-    while(bishops != 0){
-        lsb = DeBruijn(bishops);
-        pos += lsb;
-        blockers = bMask[pos] & all_blockers;
-        moves = bMoves[pos][(blockers * BMagic[pos]) >> (64 - BBits[pos])];
-        moves = moves ^ our_pieces;
-        Add_Moves(pos,moves,other);
-        bishops >>= lsb + 1;
-    }
-}
-
-void Board_State::Gen_Queen_Moves(Pieces_B* colour,Pieces_B* other){
-    Gen_Bishop_Moves(colour,other);
-    Gen_Rook_Moves(colour,other);
-}
-
-void Board_State::Gen_White_Pawn_Moves(){
-    uint64_t pawns = White.Pawns;
-    uint64_t all_positions = Get_Board();
-    uint64_t black_positions = Get_All_Pieces(&Black);
+void Board_State::gen_white_pawn_moves(){
+    uint64_t pawns = white.pawns;
+    uint64_t all_positions = get_board();
+    uint64_t black_positions = get_all_pieces(&black);
     uint64_t position;
-    int pos = 0;
+    //Init to -1 since the first time we add one more than we'd want to
+    int pos = -1;
     int lsb;
     while(pawns != 0){
-        lsb = DeBruijn(pawns);
-        pos += lsb;
+        lsb = debruijn(pawns);
+        pos += lsb + 1;
         position = 1ULL << pos;
         if ((all_positions & (position << 8)) == 0){
-            Add_Move(pos,pos + 8,0);
+            add_move(pos,pos + 8,0);
         }
         //Two forward
         if ((all_positions & (position << 16)) == 0 && (pos / 8) == 1){
-            Add_Move(pos,pos + 16,0);
+            add_move(pos,pos + 16,0);
         }
         //One forward and left/right
         if (black_positions & (position << 9) == 1){
-            Add_Move(pos,pos + 9,1);
+            add_move(pos,pos + 9,1);
         }
         if (black_positions & (position << 7) == 1){
-            Add_Move(pos,pos + 7,1);
+            add_move(pos,pos + 7,1);
         }
         pawns >>= lsb + 1;
+
     }
 }
 
-void Board_State::Gen_Black_Pawn_Moves(){
-    uint64_t pawns = Black.Pawns;
-    uint64_t all_positions = Get_Board();
-    uint64_t white_positions = Get_All_Pieces(&White);
+void Board_State::gen_black_pawn_moves(){
+    uint64_t pawns = black.pawns;
+    uint64_t all_positions = get_board();
+    uint64_t white_positions = get_all_pieces(&white);
     uint64_t position;
-    int pos = 0;
+    int pos = -1;
     int lsb;
     while(pawns != 0){
-        lsb = DeBruijn(pawns);
-        pos += lsb;
+        lsb = debruijn(pawns);
+        pos += lsb + 1;
         position = 1ULL << pos;
         if ((all_positions & (position >> 8)) == 0){
-            Add_Move(pos,pos - 8,0);
+            add_move(pos,pos - 8,0);
         }
         //Two forward
         if ((all_positions & (position >> 16)) == 0 && (pos / 8) == 1){
-            Add_Move(pos,pos - 16,0);
+            add_move(pos,pos - 16,0);
         }
         //One forward and left/right
         if (white_positions & (position >> 9) == 1){
-            Add_Move(pos,pos - 9,1);
+            add_move(pos,pos - 9,1);
         }
         if (white_positions & (position >> 7) == 1){
-            Add_Move(pos,pos - 7,1);
+            add_move(pos,pos - 7,1);
         }
         pawns >>= lsb + 1;
     }
 }
 
-void Board_State::Gen_White_Moves(){
-    Gen_Queen_Moves(&White,&Black);
-    Gen_Rook_Moves(&White,&Black);
-    Gen_Bishop_Moves(&White,&Black);
-    Gen_White_Pawn_Moves();
+void Board_State::gen_white_moves(){
+    gen_queen_moves(&white,&black);
+    gen_rook_moves(&white,&black);
+    gen_bishop_moves(&white,&black);
+    gen_k_moves(&white,&black,white.knights,move_database->kn_moves);
+    gen_k_moves(&white,&black,white.king,move_database->ki_moves);
+    gen_white_pawn_moves();
 }
 
-void Board_State::Gen_Black_Moves(){
-    Gen_Queen_Moves(&Black,&White);
-    Gen_Rook_Moves(&Black,&White);
-    Gen_Bishop_Moves(&Black,&White);
-    Gen_Black_Pawn_Moves();
+void Board_State::gen_black_moves(){
+    gen_queen_moves(&black,&white);
+    gen_rook_moves(&black,&white);
+    gen_bishop_moves(&black,&white);
+    gen_k_moves(&black,&white,black.knights,move_database->kn_moves);
+    gen_k_moves(&black,&white,black.king,move_database->ki_moves);
+    gen_black_pawn_moves();
 }
 
 
 
-void Board_State::Add_Move(uint_fast16_t origin,uint_fast16_t destination,uint_fast16_t type){
+void Board_State::add_move(uint_fast16_t origin,uint_fast16_t destination,uint_fast16_t type){
     //Resize in chunks of 32 as of now.
     //Average chess position is about 30 moves
-    if (MoveIndex % 32 == 0){
-        Moves.resize(MoveIndex + 32);
+    if (move_index % 32 == 0){
+        Moves.resize(move_index + 32);
     }
-    Moves[MoveIndex] = type + (destination << 4) + (origin << 10);
-    MoveIndex++;
+    std::cout << "from " << origin << " to " << destination << std::endl;
+    Moves[move_index] = type + (destination << 4) + (origin << 10);
+    move_index++;
 }
+
+
+bool Board_State::king_attacked(){
+    //babers why
+    int pos = debruijn(white.king);
+    uint64_t check = 0;
+
+    //Check knight moves
+    check |= move_database->kn_moves[pos] & black.knights;
+
+    //Check Pawns
+    check |= black.pawns & ((white.king >> 9) + (white.king >> 7));
+
+    //The way we check if the king is attacked by bishops, rooks and queens
+    //is by pretending that the king is each of these pieces sequentially,
+    //then seeing if we can attack any of the other pieces from the king.
+
+    //Check Rooks/Queens
+    uint64_t blockers = (get_board() ^ (black.rooks | black.queens)) & move_database->r_mask[pos];
+    uint64_t moves = move_database->r_moves[pos][(blockers * magic_numbers->r_magic[pos]) >> magic_numbers->r_magic[pos]];
+    check |= moves & (black.rooks | black.queens);
+
+    //Check Bishops/Queens
+    uint64_t blockers = (get_board() ^ (black.bishops | black.queens)) & move_database->b_mask[pos];
+    uint64_t moves = move_database->b_moves[pos][(blockers * magic_numbers->b_magic[pos]) >> magic_numbers->b_magic[pos]];
+    check |= moves & (black.bishops | black.queens);
+
+    //If check is 0 the king is not attacked
+    return !check;
+}
+
+void Board_State::make_move(uint_fast16_t move){
+    int origin = move >> 10;
+    int destination = (move & 0xfc00) >> 4;
+    int type = (move & 0xfff0);
+
+    
+}
+
 
 
 int main(){
     //Board_State test("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR");
-    MoveData* ans = get_move_data();
-    rMask = ans->rMask;bMask = ans->bMask;
-    rMoves = ans->rMoves;bMoves = ans->bMoves;
-    Board_State test;
-    std::cout << test.Black.Bishops << std::endl;
+    Magics* magic_numbers = Get_Magics();
+    MoveData* move_database = get_move_data(magic_numbers);
+    Board_State test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",move_database,magic_numbers);
+
+    test.gen_white_moves();
+
+    std::cout << "Moves generated" << std::endl;
+
+    std::cout << test.Moves.size() << std::endl;
     // for(int i = 0; i < test.MoveIndex;i++){
     //     std::cout << test.Moves[i] << std::endl;
     // }0x022fdd63cc95386d
     // std::cout << "done" << std::endl;
     // std::cout << test.MoveIndex << std::endl;
     //MY_GLOBALS_H::RMagic
-    std::cout << RMagic[0] << std::endl;
 }

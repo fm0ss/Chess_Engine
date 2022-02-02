@@ -1,11 +1,10 @@
-#include<stdint.h>
-#include<DeBruijn.hpp>
+#include"DeBruijn.hpp"
 
-uint64_t isolate_lsb(uint64_t x){
+uint64_t isolate_lsb(int64_t x){
     return x & -x;
 }
 
-int DeBruijn(uint64_t x){
+int debruijn(uint64_t x){
     x = isolate_lsb(x);
     x *= DEBRUIJN_CONSTANT;
     x >>= 58;

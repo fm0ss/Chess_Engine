@@ -1,41 +1,54 @@
+#include<iostream>
 #include<stdint.h>
 #include<string>
+#include<cctype>
 #include<vector>
+#include<unordered_map>
+#include"move-database.hpp"
+#include"DeBruijn.hpp"
+
 
 struct Pieces_B{
-    uint64_t Pawns = 0;
-    uint64_t Rooks = 0;
-    uint64_t Knights = 0;
-    uint64_t King = 0;
-    uint64_t Bishops = 0;
-    uint64_t Queens = 0;
-    bool Queen_Side = true;
-    bool King_Side = true;
+    uint64_t pawns = 0;
+    uint64_t rooks = 0;
+    uint64_t knights = 0;
+    uint64_t king = 0;
+    uint64_t bishops = 0;
+    uint64_t queens = 0;
+    bool queen_side = true;
+    bool king_side = true;
+    std::vector<uint64_t*> all_bitboards;
+    void generate_bitboards();
 };
 
 class Board_State{
+    Magics* magic_numbers;
+    MoveData* move_database;
+    Pieces_B black,white;
     public:
-        //Make private later will break debugging methods
-        Pieces_B Black,White;
         std::vector<uint_fast16_t> Moves = std::vector<uint_fast16_t>(32,0);
-        int MoveIndex = 0;
+        int move_index = 0;
         Board_State(std::string);
         //Delegating constructor for default
         Board_State() : Board_State("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"){}
-        void Print_Bitboard();
-        static void Print_Colour(Pieces_B*);
-        static uint64_t Get_All_Pieces(Pieces_B*);
-        uint64_t Get_Board();
-        void Get_All_Moves_White();
-        void Gen_Rook_Moves(Pieces_B*,Pieces_B*);
-        void Gen_Bishop_Moves(Pieces_B*,Pieces_B*);
-        void Gen_Queen_Moves(Pieces_B*,Pieces_B*);
-        void Gen_White_Pawn_Moves();
-        void Gen_Black_Pawn_Moves();
-        void Gen_White_Moves();
-        void Gen_Black_Moves();
-        void Gen_Sliding_Moves(Pieces_B* colour,Pieces_B* other,uint64_t piece,std::unordered_map<uint_fast16_t,uint64_t>* Moves,uint64_t* Magic, uint64_t* Bits,uint64_t* Mask);
-        void Add_Move(uint_fast16_t,uint_fast16_t,uint_fast16_t);
-        void Board_State::Add_Moves(int pos, uint64_t moves,Pieces_B* other);
-        void Board_State::Add_Moves_Sub(int type,int pos, uint64_t moves);
+        Board_State(std::string,MoveData*,Magics*);
+        void print_bitboard();
+        static void print_colour(Pieces_B*);
+        static uint64_t get_all_pieces(Pieces_B*);
+        uint64_t get_board();
+        bool king_attacked();
+        void make_move(uint_fast16_t);
+        void get_all_moves_white();
+        void gen_rook_moves(Pieces_B*,Pieces_B*);
+        void gen_bishop_moves(Pieces_B*,Pieces_B*);
+        void gen_queen_moves(Pieces_B*,Pieces_B*);
+        void gen_k_moves(Pieces_B*,Pieces_B*,uint64_t,uint64_t*);
+        void gen_white_pawn_moves();
+        void gen_black_pawn_moves();
+        void gen_white_moves();
+        void gen_black_moves();
+        void gen_sliding_moves(Pieces_B* ,Pieces_B* ,uint64_t ,std::unordered_map<uint_fast16_t,uint64_t>* ,const uint64_t* , const int* ,uint64_t*);
+        void add_move(uint_fast16_t,uint_fast16_t,uint_fast16_t);
+        void add_moves(int , uint64_t ,Pieces_B* );
+        void add_moves_sub(int ,int , uint64_t );
 };

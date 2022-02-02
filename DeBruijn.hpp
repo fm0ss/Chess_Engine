@@ -11,5 +11,5 @@ const unsigned int convert[64] = {
         50, 31, 19, 15, 30, 14, 13, 12
 };
 
-uint64_t DEBRUIJN_CONSTANT = 0x022fdd63cc95386d;
-int DeBruijn(uint64_t);
+const uint64_t DEBRUIJN_CONSTANT = 0x022fdd63cc95386d;
+int debruijn(uint64_t);

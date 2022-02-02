@@ -1,9 +1,13 @@
 #include<stdint.h>
+#include<unordered_map>
 
-#ifndef __magic_h__
-#define __magic_h__
-extern const uint64_t RMagic[64];
-extern const uint64_t BMagic[64];
-extern const int RBits[64];
-extern const int BBits[64];
-#endif
+typedef struct Magics Magics;
+
+struct Magics{
+    const uint64_t* r_magic;
+    const uint64_t* b_magic;
+    const int* r_bits;
+    const int* b_bits;
+};
+
+Magics* Get_Magics();

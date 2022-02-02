@@ -1,0 +1,8 @@
+for game in games:
+    board = init_board()
+    for move in move:
+        if board.turn() == White:
+            eval(board)
+        else:
+            eval(board.flip())
+        board.make_move(move)

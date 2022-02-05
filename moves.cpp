@@ -31,11 +31,13 @@ Board_State::Board_State(std::string fen,MoveData* move_database, Magics* magic_
     black.generate_bitboards();
     this->move_database = move_database;
     this->magic_numbers = magic_numbers;
-    uint64_t position = 1;
-    position <<= 63;
+    int pos = 56;
+    uint64_t position;
+    //std::cout << position;
     for (auto &c : fen){
+        position = 1ULL << pos;
         if (isdigit(c)){
-            position >>= (c - '0');
+            pos += (c - '0');
         }
         else if (c != '/'){
             switch(c){
@@ -64,7 +66,10 @@ Board_State::Board_State(std::string fen,MoveData* move_database, Magics* magic_
                 case 'K':
                     white.king = white.king | position;break;
             }
-            position >>= 1;
+            pos++;
+        }
+        else{
+            pos -= 16;
         }
     }
 }
@@ -247,6 +252,7 @@ void Board_State::gen_black_moves(){
 void Board_State::add_move(uint_fast16_t origin,uint_fast16_t destination,uint_fast16_t type){
     //Resize in chunks of 32 as of now.
     //Average chess position is about 30 moves
+    //std::cout << origin << " " << destination << std::endl;
     if (move_index % 32 == 0){
         Moves.resize(move_index + 32);
     }
@@ -260,6 +266,7 @@ bool Board_State::king_attacked(){
     //babers why
     int pos = debruijn(white.king);
     uint64_t check = 0;
+    uint64_t blockers, moves;
 
     //Check knight moves
     check |= move_database->kn_moves[pos] & black.knights;
@@ -272,13 +279,13 @@ bool Board_State::king_attacked(){
     //then seeing if we can attack any of the other pieces from the king.
 
     //Check Rooks/Queens
-    uint64_t blockers = (get_board() ^ (black.rooks | black.queens)) & move_database->r_mask[pos];
-    uint64_t moves = move_database->r_moves[pos][(blockers * magic_numbers->r_magic[pos]) >> magic_numbers->r_magic[pos]];
+    blockers = (get_board() ^ (black.rooks | black.queens)) & move_database->r_mask[pos];
+    moves = move_database->r_moves[pos][(blockers * magic_numbers->r_magic[pos]) >> magic_numbers->r_magic[pos]];
     check |= moves & (black.rooks | black.queens);
 
     //Check Bishops/Queens
-    uint64_t blockers = (get_board() ^ (black.bishops | black.queens)) & move_database->b_mask[pos];
-    uint64_t moves = move_database->b_moves[pos][(blockers * magic_numbers->b_magic[pos]) >> magic_numbers->b_magic[pos]];
+    blockers = (get_board() ^ (black.bishops | black.queens)) & move_database->b_mask[pos];
+    moves = move_database->b_moves[pos][(blockers * magic_numbers->b_magic[pos]) >> magic_numbers->b_magic[pos]];
     check |= moves & (black.bishops | black.queens);
 
     //If check is 0 the king is not attacked
@@ -286,11 +293,31 @@ bool Board_State::king_attacked(){
 }
 
 void Board_State::make_move(uint_fast16_t move){
-    int origin = move >> 10;
-    int destination = (move & 0xfc00) >> 4;
+    uint64_t origin = 1 << (move >> 10);
+    uint64_t destination = 1 << ((move & 0xfc00) >> 4);
     int type = (move & 0xfff0);
-
-    
+    if (type == 1 | type == 0){
+        for (auto i : white.all_bitboards){
+            if (*i & origin != 0){
+                *i = *i | destination;
+                *i = *i & !origin;
+            }
+            else{
+                *i = *i & !destination;
+            }
+        //*i = *i | (destination * (int)(bool)(*i & origin));
+        //This is a branchless solution test if it is better
+        }
+        for (auto i : black.all_bitboards){
+            if (*i & origin != 0){
+                *i = *i | destination;
+                *i = *i & !origin;
+            }
+            else{
+                *i = *i & !destination;
+            }
+        }
+    }
 }
 
 
@@ -299,7 +326,7 @@ int main(){
     //Board_State test("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR");
     Magics* magic_numbers = Get_Magics();
     MoveData* move_database = get_move_data(magic_numbers);
-    Board_State test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1",move_database,magic_numbers);
+    Board_State test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",move_database,magic_numbers);
 
     test.gen_white_moves();
 

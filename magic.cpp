@@ -156,6 +156,8 @@ const uint64_t RMagic[64] = {
   6, 5, 5, 5, 5, 5, 5, 6
 };
 
+
+//Returns an struct containing the above data
 Magics* Get_Magics(){
   Magics* data = new Magics;
   data->b_bits = BBits;

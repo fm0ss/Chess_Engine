@@ -123,7 +123,6 @@ void add_rook_moves(std::unordered_map<uint_fast16_t,uint64_t>* rMoves,int x,int
               for (int u = 0; u < (1 << (7 - y));u++){
                   //Create key
                   mask = add_ones_rook(l,r,d,u,x,y);
-                  //key = (mask * MagicNumbers->r_magic[y * 8 + x]) >> (64 - MagicNumbers->r_bits[y * 8 + x]);
                   key = (mask * MagicNumbers->r_magic[position]) >> (64 - MagicNumbers->r_bits[position]);
                   //Add to the hashMap
                   if (rMoves[position].find(key) == rMoves[position].end()){

@@ -10,11 +10,12 @@ enum MoveType {NORMAL,CAPTURE,ENPASSANT,CASTLING,PROMOTE_KNIGHT,PROMOTE_BISHOP,P
 
 //I needed a list of all the bitboard memory locations to make the move making function more simple
 void Pieces_B::generate_bitboards(){
-    all_bitboards.push_back(&rooks);
-    all_bitboards.push_back(&bishops);
-    all_bitboards.push_back(&queens);
-    all_bitboards.push_back(&king);
+    all_bitboards.clear();
     all_bitboards.push_back(&pawns);
+    all_bitboards.push_back(&bishops);
+    all_bitboards.push_back(&king);
+    all_bitboards.push_back(&queens);
+    all_bitboards.push_back(&rooks);
     all_bitboards.push_back(&knights);
 }
 
@@ -44,13 +45,14 @@ void Pieces_B::update_copys(){
     rooks_copy = rooks;
     queens_copy = queens;
     king_copy = king;
-    knights_copy = queens;
+    knights_copy = knights;
     bishops_copy = bishops;
 }
 
 //Returns to the state before a move was made
 //Will be called externally from the tree search
 void Pieces_B::set_to_copys(){
+    //std::cout << pawns_copy << " HERE" << std::endl;
     pawns = pawns_copy;
     rooks = rooks_copy;
     queens = queens_copy;
@@ -70,7 +72,6 @@ Board_State::Board_State(std::string fen,MoveData* move_database, Magics* magic_
     this->magic_numbers = magic_numbers;
     int pos = 56;
     uint64_t position;
-    //std::cout << position;
     for (auto &c : fen){
         position = 1ULL << pos;
         if (isdigit(c)){
@@ -113,6 +114,51 @@ Board_State::Board_State(std::string fen,MoveData* move_database, Magics* magic_
     black.set_all_pieces();
 }
 
+//Init from parent board state and then make a move
+Board_State::Board_State(Board_State* board,uint_fast16_t move){
+    move_database = board->move_database;
+    magic_numbers = board->magic_numbers;
+    white = board->white;
+    black = board->black;
+    white.generate_bitboards();
+    black.generate_bitboards();
+
+    //make_move(move);
+    white_to_move = !board->white_to_move;
+    white.set_all_pieces();
+    black.set_all_pieces();
+}
+
+//Updates castling information
+void Board_State::set_castling_info(){
+    uint64_t king;
+    //If white could castle kingside up to now
+    if (white.king_side){
+        //If the king and rooks are in the right place
+        if (!((white.king == 0x10) && ((white.rooks & 0x80) == 0x80))){
+            white.king_side = false;
+        }
+    }
+    if (white.queen_side){
+        //If the king and rooks are in the right place
+        if (!((white.king == 0x10) && ((white.rooks & 0x1) == 0x1))){
+            white.queen_side = false;
+        }
+    }
+    if (black.king_side){
+        //If the king and rooks are in the right place
+        if ((black.king == 0x1000000000000000) && ((black.rooks & 0x8000000000000000) == 0x8000000000000000)){
+            black.king_side = false;
+        }
+    }
+    if (black.queen_side){
+        //If the king and rooks are in the right place
+        if ((black.king == 0x1000000000000000) && ((black.rooks & 0x100000000000000) == 0x100000000000000)){
+            black.queen_side = false;
+        }
+    }
+    
+}
 
 //Just for debugging
 void Board_State::print_colour(Pieces_B* colour){
@@ -126,13 +172,11 @@ void Board_State::print_colour(Pieces_B* colour){
 
 //Also just for debugging
 void Board_State::print_bitboard(){
-    std::cout << "white" << std::endl;
     print_colour(&white);
-    std::cout << "black" << std::endl;
     print_colour(&black);
 }
 
-//Deprecated - remove later
+//Deprecated - kept for the project, but no longer used.
 uint64_t Board_State::get_all_pieces(Pieces_B* colour){
     return colour->bishops | colour->pawns | colour->rooks | colour->knights | colour->queens | colour->king;
 }
@@ -145,12 +189,10 @@ uint64_t Board_State::get_board(){
 //Given a list of moves in the form of a 64 bit integer it adds all the moves to the move list
 void Board_State::add_moves_sub(int type,int from, uint64_t moves){
     int lsb;
-    int pos = -1;
     while(moves != 0){
-        lsb = debruijn(moves);
-        pos += lsb + 1;
-        add_move(from,pos,type);
-        moves >>= lsb + 1;
+        lsb = ffsl(moves) - 1;
+        add_move(from,lsb,type);
+        moves &= moves - 1;
     }
 }
 
@@ -172,18 +214,19 @@ void Board_State::gen_sliding_moves(Pieces_B* colour,Pieces_B* other,uint64_t pi
     uint64_t all_blockers = get_board();
     uint64_t blockers;
     uint64_t moves;
-    int pos = -1;
     int lsb;
+    //Bitscan Forward Loop
     while(piece != 0){
-        lsb = debruijn(piece);
-        pos += lsb + 1;
+        //Get the lsb starting at 0
+        lsb = ffsl(piece) - 1;
         //Calculate moves
-        blockers = Mask[pos] & all_blockers;
-        moves = Moves[pos][(blockers * Magic[pos]) >> (64 - Bits[pos])];
+        blockers = Mask[lsb] & all_blockers;
+        moves = Moves[lsb][(blockers * Magic[lsb]) >> (64 - Bits[lsb])];
         //So we don't take our own pieces
         moves = (moves & ~our_pieces);
-        add_moves(pos,moves,other);
-        piece >>= lsb + 1;
+        add_moves(lsb,moves,other);
+        //Remove lsb
+        piece &= piece - 1;
     }
 }
 
@@ -207,16 +250,17 @@ void Board_State::gen_queen_moves(Pieces_B* colour,Pieces_B* other){
 void Board_State::gen_k_moves(Pieces_B* colour,Pieces_B* other,uint64_t piece,uint64_t* move_lookup){
     uint64_t moves;
     uint64_t our_pieces = colour->all_pieces;
-    int pos = -1;
     int lsb;
-    while(piece != 0){
-        lsb = debruijn(piece);
-        pos += lsb + 1;
-        moves = move_lookup[pos];
+    //Bitscan Forward Loop
+    while(piece != 0){ 
+        //Get the lsb starting at 0
+        lsb = ffsl(piece) - 1;
+        moves = move_lookup[lsb];
         //So we don't take our own pieces
         moves = (moves & ~our_pieces);
-        add_moves(pos,moves,other);
-        piece >>= lsb + 1;
+        add_moves(lsb,moves,other);
+        //Remove lsb
+        piece &= piece - 1;
     }
 }
 
@@ -225,28 +269,25 @@ void Board_State::gen_white_pawn_moves(){
     uint64_t all_positions = get_board();
     uint64_t black_positions = black.all_pieces;
     uint64_t position;
-    //Init to -1 since the first time we add one more than we'd want to
-    int pos = -1;
     int lsb;
     while(pawns != 0){
-        lsb = debruijn(pawns);
-        pos += lsb + 1;
-        position = 1ULL << pos;
+        lsb = ffsl(pawns) - 1;
+        position = 1ULL << lsb;
         if ((all_positions & (position << 8)) == 0){
-            add_white_pawn_move(pos,pos + 8,NORMAL);
+            add_white_pawn_move(lsb,lsb + 8,NORMAL);
         }
         //Two forward
-        if ((all_positions & (position << 16)) == 0 && (pos / 8) == 1){
-            add_move(pos,pos + 16,NORMAL);
+        if ((all_positions & (position << 16)) == 0 && (lsb / 8) == 1){
+            add_move(lsb,lsb + 16,NORMAL);
         }
         //One forward and left/right
-        if (black_positions & (position << 9) == 1){
-            add_white_pawn_move(pos,pos + 9,CAPTURE);
+        if ((black_positions & (position << 9)) != 0){
+            add_white_pawn_move(lsb,lsb + 9,CAPTURE);
         }
-        if (black_positions & (position << 7) == 1){
-            add_white_pawn_move(pos,pos + 7,CAPTURE);
+        if ((black_positions & (position << 7)) != 0){
+            add_white_pawn_move(lsb,lsb + 7,CAPTURE);
         }
-        pawns >>= lsb + 1;
+        pawns &= pawns - 1;
 
     }
     //En Passant Check
@@ -256,10 +297,10 @@ void Board_State::gen_white_pawn_moves(){
     //If the previous move was a double pawn push and behind the pawn is clear
     if ((black.pawns & destination) != 0 & (origin / destination) == (1ULL << 16) & (((destination << 8) & get_board()) == 0)){
         if ((white.pawns & (destination << 1)) != 0){
-            add_move(debruijn(destination << 1),debruijn(destination << 8),2);
+            add_move(ffsl(destination << 1) - 1,ffsl(destination << 8) - 1,2);
         }
         if ((white.pawns & (destination >> 1)) != 0){
-            add_move(debruijn(destination >> 1),debruijn(destination << 8),2);
+            add_move(ffsl(destination >> 1) - 1,ffsl(destination << 8) - 1,2);
         }
     }
 }
@@ -269,27 +310,25 @@ void Board_State::gen_black_pawn_moves(){
     uint64_t all_positions = get_board();
     uint64_t white_positions = white.all_pieces;
     uint64_t position;
-    int pos = -1;
     int lsb;
     while(pawns != 0){
-        lsb = debruijn(pawns);
-        pos += lsb + 1;
-        position = 1ULL << pos;
+        lsb = ffsl(pawns) - 1;
+        position = 1ULL << lsb;
         if ((all_positions & (position >> 8)) == 0){
-            add_black_pawn_move(pos,pos - 8,NORMAL);
+            add_black_pawn_move(lsb,lsb - 8,NORMAL);
         }
         //Two forward
-        if ((all_positions & (position >> 16)) == 0 && (pos / 8) == 6){
-            add_move(pos,pos - 16,NORMAL);
+        if ((all_positions & (position >> 16)) == 0 && (lsb / 8) == 6){
+            add_move(lsb,lsb - 16,NORMAL);
         }
         //One forward and left/right
-        if (white_positions & (position >> 9) == 1){
-            add_black_pawn_move(pos,pos - 9,CAPTURE);
+        if ((white_positions & (position >> 9)) != 0){
+            add_black_pawn_move(lsb,lsb - 9,CAPTURE);
         }
-        if (white_positions & (position >> 7) == 1){
-            add_black_pawn_move(pos,pos - 7,CAPTURE);
+        if ((white_positions & (position >> 7)) != 0){
+            add_black_pawn_move(lsb,lsb - 7,CAPTURE);
         }
-        pawns >>= lsb + 1;
+        pawns &= pawns - 1;
     }
     //En Passant Check
     uint64_t origin = (1ULL << (prev_move >> 10));
@@ -298,17 +337,17 @@ void Board_State::gen_black_pawn_moves(){
     //If the previous move was a double pawn push and behind the pawn is clear
     if ((white.pawns & destination) != 0 & (destination / origin) == (1ULL << 16) & (((destination >> 8) & get_board()) == 0)){
         if ((black.pawns & (destination << 1)) != 0){
-            add_move(debruijn(destination << 1),debruijn(destination >> 8),2);
+            add_move(ffsl(destination << 1) - 1,ffsl(destination >> 8) - 1,2);
         }
         if ((white.pawns & (destination >> 1)) != 0){
-            add_move(debruijn(destination >> 1),debruijn(destination >> 8),2);
+            add_move(ffsl(destination >> 1) - 1,ffsl(destination >> 8) - 1,2);
         }
     }
 }
 
 void Board_State::gen_white_castling_moves(){
     //Check if we can castle and that the space is clear
-    if (white.queen_side == true & (0x7 & get_board()) == 0){
+    if (white.queen_side == true & (0xe & get_board()) == 0){
         add_move(4,2,3);
     }
     if (white.king_side == true & (0x60 & get_board()) == 0){
@@ -318,7 +357,7 @@ void Board_State::gen_white_castling_moves(){
 
 void Board_State::gen_black_castling_moves(){
     //Check if we can castle and that the space is clear
-    if (black.queen_side == true & (0x700000000000000 & get_board()) == 0){
+    if (black.queen_side == true & (0xe00000000000000 & get_board()) == 0){
         add_move(60,58,3);
     }
     if (black.king_side == true & (0x6000000000000000 & get_board()) == 0){
@@ -326,7 +365,18 @@ void Board_State::gen_black_castling_moves(){
     }
 }
 
+//Works out whose move it is, then generates that move.
+void Board_State::gen_moves(){
+    if (white_to_move){
+        gen_white_moves();
+    }
+    else{
+        gen_black_moves();
+    }
+}
 
+
+//Generates all the moves for white
 void Board_State::gen_white_moves(){
     white.update_copys();
     black.update_copys();
@@ -338,6 +388,7 @@ void Board_State::gen_white_moves(){
     gen_k_moves(&white,&black,white.knights,move_database->kn_moves);
     gen_k_moves(&white,&black,white.king,move_database->ki_moves);
     gen_white_pawn_moves();
+    gen_white_castling_moves();
 }
 
 void Board_State::gen_black_moves(){
@@ -351,9 +402,10 @@ void Board_State::gen_black_moves(){
     gen_k_moves(&black,&white,black.knights,move_database->kn_moves);
     gen_k_moves(&black,&white,black.king,move_database->ki_moves);
     gen_black_pawn_moves();
+    gen_black_castling_moves();
 }
 
-//Seperate functions for adding pawn moves are needed in order to handle promotions
+//Separate functions for adding pawn moves are needed in order to handle promotions
 void Board_State::add_white_pawn_move(uint_fast16_t origin,uint_fast16_t destination,uint_fast16_t type){
     //If it is a promotion
     if (destination / 8 == 7){
@@ -383,18 +435,50 @@ void Board_State::add_move(uint_fast16_t origin,uint_fast16_t destination,uint_f
     //Average chess position is about 30 moves
     //std::cout << origin << " " << destination << std::endl;
 
-    if (move_index % 32 == 0){
-        Moves.resize(move_index + 32);
-    }
-    std::cout << "from " << origin << " to " << destination << std::endl;
-    Moves[move_index] = type + (destination << 4) + (origin << 10);
-    move_index++;
+    // if (move_index % 32 == 0){
+    //     Moves.resize(move_index + 32);
+    // }
+    //std::cout << "from " << origin << " to " << destination << " move type "  << type << std::endl;
+    // Moves[move_index] = type + (destination << 4) + (origin << 10);
+    // move_index++;
+    //std::cout << (type + (destination << 4) + (origin << 10)) << std::endl;
+    Moves.push_back(type + (destination << 4) + (origin << 10));
 }
 
+bool Board_State::black_king_attacked(){
+    int pos = ffsl(black.king) - 1;
+    uint64_t check = 0;
+    uint64_t blockers, moves;
 
-bool Board_State::king_attacked(){
-    //babers why
-    int pos = debruijn(white.king);
+    //Check knight moves
+    check |= move_database->kn_moves[pos] & white.knights;
+
+    //Check Pawns
+    check |= white.pawns & ((black.king >> 9) + (black.king >> 7));
+
+    //Check King
+    check |= move_database->ki_moves[pos] & white.king;
+
+    //The way we check if the king is attacked by bishops, rooks and queens
+    //is by pretending that the king is each of these pieces sequentially,
+    //then seeing if we can attack any of the other pieces from the king.
+
+    //Check Rooks/Queens
+    blockers = (get_board() ^ (white.rooks | white.queens)) & move_database->r_mask[pos];
+    moves = move_database->r_moves[pos][(blockers * magic_numbers->r_magic[pos]) >> magic_numbers->r_magic[pos]];
+    check |= moves & (white.rooks | white.queens);
+
+    //Check Bishops/Queens
+    blockers = (get_board() ^ (white.bishops | white.queens)) & move_database->b_mask[pos];
+    moves = move_database->b_moves[pos][(blockers * magic_numbers->b_magic[pos]) >> magic_numbers->b_magic[pos]];
+    check |= moves & (white.bishops | white.queens);
+
+    //If check is 0 the king is not attacked
+    return check;
+}
+
+bool Board_State::white_king_attacked(){
+    int pos = ffsl(white.king) - 1;
     uint64_t check = 0;
     uint64_t blockers, moves;
 
@@ -402,7 +486,10 @@ bool Board_State::king_attacked(){
     check |= move_database->kn_moves[pos] & black.knights;
 
     //Check Pawns
-    check |= black.pawns & ((white.king >> 9) + (white.king >> 7));
+    check |= black.pawns & ((white.king << 9) + (white.king << 7));
+
+    //Check King
+    check |= move_database->ki_moves[pos] & black.king;
 
     //The way we check if the king is attacked by bishops, rooks and queens
     //is by pretending that the king is each of these pieces sequentially,
@@ -422,8 +509,19 @@ bool Board_State::king_attacked(){
     return check;
 }
 
+bool Board_State::king_attacked(){
+    if (white_to_move){
+        return white_king_attacked();
+    }
+    else{
+        return black_king_attacked();
+    }
+}
+
 void Board_State::make_move(uint_fast16_t move){
+    //This now becomes the previous move
     prev_move = move;
+    //Using bit hackery to extract the origin and destination
     uint64_t origin = (1ULL << (move >> 10));
     uint64_t destination = (1ULL << ((move & 0x3f0) >> 4));
     int type = (move & 0xf);
@@ -437,8 +535,6 @@ void Board_State::make_move(uint_fast16_t move){
             else{
                 *i = *i & ~destination;
             }
-        //*i = *i | (destination * (int)(bool)(*i & origin));
-        //This is a branchless solution test if it is better
         }
         for (auto i : black.all_bitboards){
             if ((*i & origin) != 0){
@@ -500,69 +596,92 @@ void Board_State::make_move(uint_fast16_t move){
             black.promote_piece(destination,type);
         }
     }
-    white_to_move = !white_to_move;
-    white.set_all_pieces();
-    black.set_all_pieces();
-    //Castling information is done upon initialisation of a Board_State object
-    //The reason it's not done here is because whenever we select a move
-    //We go to that new board, so it makes sense for it to be done externally
-    //A function will look at the parent nodes castling information then change it if the move affected castling
+    //update castling information
+    set_castling_info();
 }
 
 bool Board_State::validate_move(uint_fast16_t move){
     //Make a move then check if the king is attack,
     //and return whether or not it is valid
-    //If it is not valid the move will be undone
     make_move(move);
-    return king_attacked();
+    if (white_to_move){
+        return !black_king_attacked();
+    }
+    else{
+        return !white_king_attacked();
+    }
 }
 
-//In order to undo the above function or calls to make_move() in general
+//In order to undo the above fun    std::cout << "from " << origin << " to " << destination << std::endl;
+//ction or calls to make_move() in general
+//Returns bitboards to the last copy that was made
 void Board_State::unmake_move(){
     white.set_to_copys();
     black.set_to_copys();
 }
 
-
-int main(){
-    //Board_State test("rnbqkbnr/pppppppp/8/8/4P3/8/PPPP1PPP/RNBQKBNR");
-    Magics* magic_numbers = Get_Magics();
-    MoveData* move_database = get_move_data(magic_numbers);
-    Board_State test("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR",move_database,magic_numbers);
-
-    std::cout << test.get_board() << std::endl;
-
-    test.gen_white_moves();
-
-    std::cout << test.Moves[5] << std::endl;
-
-    test.make_move(test.Moves[5]);
-
-    test.gen_white_moves();
-
-    std::cout << test.Moves[20] << std::endl;
-
-    test.make_move(test.Moves[20]);
-
-    test.gen_black_moves();
-
-    std::cout << test.Moves[6] << std::endl;
-
-    std::cout << test.get_board() << std::endl;
-
-    test.make_move(test.Moves[6]);
-
-    std::cout << test.get_board() << std::endl;
-
-    test.gen_white_moves();
-
-    std::cout << "Moves generated" << std::endl;
-
-    std::cout << test.Moves.size() << std::endl;
-    // for(int i = 0; i < test.MoveIndex;i++){
-    //     std::cout << test.Moves[i] << std::endl;
-    // }0x022fdd63cc95386d
-    // std::cout << "done" << std::endl;
-    // std::cout << test.MoveIndex << std::endl;
-    //MY_GLOBALS_H::100001RMagic
+void Board_State::add_piece_for_eval(std::vector<float>& ans,uint64_t piece,int start){
+    int lsb;
+    while(piece != 0){
+        lsb = ffsl(piece);
+        //Set the index of the vector to 1 if the piece is there
+        ans[start + lsb] = 1;
+        piece &= piece - 1;
+    }
 }
+
+uint64_t Board_State::flip_integer(uint64_t piece){
+    //Mirrors rows so that black is swapped with white
+    //(Changes endianness of bitboard)
+    uint64_t ans = 0ULL;
+    uint64_t mask = 0xff;
+    int shift = 56;
+    for (int i = 0; i < 8;i++){
+        ans += (mask & piece) << shift;
+        shift -= 8;
+        piece >>= 8;
+    }
+    return ans;
+}
+
+void Board_State::get_board_for_eval(std::vector<float>& ans){
+    //Add check which flips board if black
+    //Takes in a vector so it can be reused, constructing one each time would be wasteful
+    //It requires dimensions of (772)
+    int j = 0;
+    if (white_to_move){
+        for (int i = 0; i < 6;i++){
+            add_piece_for_eval(ans,flip_integer(*(white.all_bitboards[i])),j);
+            add_piece_for_eval(ans,flip_integer(*(black.all_bitboards[i])),j + 64);
+            j += 128;
+        }
+        ans[772 - 4] = (int)white.king_side;
+        ans[772 - 3] = (int)white.queen_side;
+        ans[772 - 2] = (int)black.king_side;
+        ans[772 - 1] = (int)black.queen_side;
+    }
+    //If it is blacks move we flip the board representation
+    else{
+        for (int i = 0; i < 6;i++){
+            add_piece_for_eval(ans,*(black.all_bitboards[i]),j);
+            add_piece_for_eval(ans,*(white.all_bitboards[i]),j + 64);
+            j += 128;
+        }
+        ans[772 - 2] = (int)black.king_side;
+        ans[772 - 1] = (int)black.queen_side;
+        ans[772 - 4] = (int)white.king_side;
+        ans[772 - 3] = (int)white.queen_side;
+    }
+}
+
+
+// int main(){
+//     Magics* magic_numbers = Get_Magics();
+//     MoveData* move_database = get_move_data(magic_numbers);
+//     Board_State test("8/8/8/8/8/2K5/8/2r5" ,move_database,magic_numbers);
+
+//     //test.white_to_move = false;
+//     std::cout << test.king_attacked() << std::endl;
+// }
+
+//https://lichess.org/editor/2b2bnr/1ppPpp2/r5p1/p6p/1P6/PQ2P2N/3P1PPP/RNB1KBR1_w_-_-_0_1

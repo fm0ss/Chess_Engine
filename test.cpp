@@ -2,6 +2,7 @@
 #include<stdint.h>
 #include"magic.hpp"
 #include <chrono>
+#include"string.h"
 
 
 int test_func(uint64_t x){
@@ -38,7 +39,7 @@ int DeBruijn(uint64_t x){
 int main(){
     // std::cout << ((2147483656 * RMagic[0]) >> (64 - RBits[0])) << std::endl;
     // std::cout << (512 * BMagic[0]) << std::endl;
-    test_func(1231231);
+    std::cout << ffsl(1ULL << 63);
     return 0;
 }
 
@@ -47,7 +48,7 @@ void LoopThroughInt(uint64_t integer){
     int pos = 0;
     int lsb;
     while(integer != 0){
-        lsb = DeBruijn(integer);
+        lsb = __builtin_ffs(integer);
         pos += lsb;
         //Do something with pos here
 

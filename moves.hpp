@@ -4,6 +4,7 @@
 #include<cctype>
 #include<vector>
 #include<unordered_map>
+#include"string.h"
 #include"move-database.hpp"
 #include"DeBruijn.hpp"
 
@@ -38,8 +39,8 @@ struct Pieces_B{
 class Board_State{
     Magics* magic_numbers;
     MoveData* move_database;
-    Pieces_B black,white;
     public:
+        Pieces_B black,white;
         std::vector<uint_fast16_t> Moves = std::vector<uint_fast16_t>(32,0);
         uint_fast16_t prev_move = 0;
         int move_index = 0;
@@ -48,11 +49,16 @@ class Board_State{
         //Delegating constructor for default
         Board_State() : Board_State("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR"){}
         Board_State(std::string,MoveData*,Magics*);
+        Board_State(Board_State*,uint_fast16_t);
+        void set_castling_info();
+        void pretty_print_bitboard();
         void print_bitboard();
         static void print_colour(Pieces_B*);
         static uint64_t get_all_pieces(Pieces_B*);
         uint64_t get_board();
         bool king_attacked();
+        bool black_king_attacked();
+        bool white_king_attacked();
         void make_move(uint_fast16_t);
         void get_all_moves_white();
         void gen_rook_moves(Pieces_B*,Pieces_B*);
@@ -73,4 +79,8 @@ class Board_State{
         void unmake_move();
         void add_white_pawn_move(uint_fast16_t,uint_fast16_t,uint_fast16_t);
         void add_black_pawn_move(uint_fast16_t,uint_fast16_t,uint_fast16_t);
+        void get_board_for_eval(std::vector<float>&);
+        void add_piece_for_eval(std::vector<float>&,uint64_t,int start);
+        void gen_moves();
+        static uint64_t flip_integer(uint64_t);
 };

@@ -20,8 +20,8 @@ void Pieces_B::generate_bitboards(){
 }
 
 //Originally I was calculating this each time I needed, but it is used so much it is better to calculate it each time
-uint64_t Pieces_B::set_all_pieces(){
-    return all_pieces = bishops | pawns | rooks | knights | queens | king;
+void Pieces_B::set_all_pieces(){
+    all_pieces = bishops | pawns | rooks | knights | queens | king;
 }
 
 //Promotes to the correct piece for each different type
@@ -275,16 +275,17 @@ void Board_State::gen_white_pawn_moves(){
         position = 1ULL << lsb;
         if ((all_positions & (position << 8)) == 0){
             add_white_pawn_move(lsb,lsb + 8,NORMAL);
-        }
-        //Two forward
-        if ((all_positions & (position << 16)) == 0 && (lsb / 8) == 1){
-            add_move(lsb,lsb + 16,NORMAL);
+            //Two forward
+            if ((all_positions & (position << 16)) == 0 && (lsb / 8) == 1){
+                add_move(lsb,lsb + 16,NORMAL);
+            }
         }
         //One forward and left/right
-        if ((black_positions & (position << 9)) != 0){
+        //The lsb part checks that we are not at the edge of the board
+        if ((black_positions & (position << 9)) != 0 && (lsb % 8 != 7)){
             add_white_pawn_move(lsb,lsb + 9,CAPTURE);
         }
-        if ((black_positions & (position << 7)) != 0){
+        if ((black_positions & (position << 7)) != 0 && (lsb % 8 != 0)){
             add_white_pawn_move(lsb,lsb + 7,CAPTURE);
         }
         pawns &= pawns - 1;
@@ -316,16 +317,16 @@ void Board_State::gen_black_pawn_moves(){
         position = 1ULL << lsb;
         if ((all_positions & (position >> 8)) == 0){
             add_black_pawn_move(lsb,lsb - 8,NORMAL);
-        }
-        //Two forward
-        if ((all_positions & (position >> 16)) == 0 && (lsb / 8) == 6){
-            add_move(lsb,lsb - 16,NORMAL);
+            //Two forward
+            if ((all_positions & (position >> 16)) == 0 && (lsb / 8) == 6){
+                add_move(lsb,lsb - 16,NORMAL);
+            }
         }
         //One forward and left/right
-        if ((white_positions & (position >> 9)) != 0){
+        if ((white_positions & (position >> 9)) != 0 && (lsb % 8 != 0)){
             add_black_pawn_move(lsb,lsb - 9,CAPTURE);
         }
-        if ((white_positions & (position >> 7)) != 0){
+        if ((white_positions & (position >> 7)) != 0 && (lsb % 8 != 7)){
             add_black_pawn_move(lsb,lsb - 7,CAPTURE);
         }
         pawns &= pawns - 1;
@@ -339,7 +340,7 @@ void Board_State::gen_black_pawn_moves(){
         if ((black.pawns & (destination << 1)) != 0){
             add_move(ffsl(destination << 1) - 1,ffsl(destination >> 8) - 1,2);
         }
-        if ((white.pawns & (destination >> 1)) != 0){
+        if ((black.pawns & (destination >> 1)) != 0){
             add_move(ffsl(destination >> 1) - 1,ffsl(destination >> 8) - 1,2);
         }
     }
@@ -447,6 +448,7 @@ void Board_State::add_move(uint_fast16_t origin,uint_fast16_t destination,uint_f
 
 bool Board_State::black_king_attacked(){
     int pos = ffsl(black.king) - 1;
+    //std::cout << pos << std::endl;
     uint64_t check = 0;
     uint64_t blockers, moves;
 
@@ -464,13 +466,13 @@ bool Board_State::black_king_attacked(){
     //then seeing if we can attack any of the other pieces from the king.
 
     //Check Rooks/Queens
-    blockers = (get_board() ^ (white.rooks | white.queens)) & move_database->r_mask[pos];
-    moves = move_database->r_moves[pos][(blockers * magic_numbers->r_magic[pos]) >> magic_numbers->r_magic[pos]];
+    blockers = get_board() & move_database->r_mask[pos];
+    moves = move_database->r_moves[pos][(blockers * magic_numbers->r_magic[pos]) >> (64 - magic_numbers->r_bits[pos])];
     check |= moves & (white.rooks | white.queens);
 
     //Check Bishops/Queens
-    blockers = (get_board() ^ (white.bishops | white.queens)) & move_database->b_mask[pos];
-    moves = move_database->b_moves[pos][(blockers * magic_numbers->b_magic[pos]) >> magic_numbers->b_magic[pos]];
+    blockers = get_board() & move_database->b_mask[pos];
+    moves = move_database->b_moves[pos][(blockers * magic_numbers->b_magic[pos]) >> (64 - magic_numbers->b_bits[pos])];
     check |= moves & (white.bishops | white.queens);
 
     //If check is 0 the king is not attacked
@@ -496,13 +498,13 @@ bool Board_State::white_king_attacked(){
     //then seeing if we can attack any of the other pieces from the king.
 
     //Check Rooks/Queens
-    blockers = (get_board() ^ (black.rooks | black.queens)) & move_database->r_mask[pos];
-    moves = move_database->r_moves[pos][(blockers * magic_numbers->r_magic[pos]) >> magic_numbers->r_magic[pos]];
+    blockers = get_board() & move_database->r_mask[pos];
+    moves = move_database->r_moves[pos][(blockers * magic_numbers->r_magic[pos]) >> (64 - magic_numbers->r_bits[pos])];
     check |= moves & (black.rooks | black.queens);
 
     //Check Bishops/Queens
-    blockers = (get_board() ^ (black.bishops | black.queens)) & move_database->b_mask[pos];
-    moves = move_database->b_moves[pos][(blockers * magic_numbers->b_magic[pos]) >> magic_numbers->b_magic[pos]];
+    blockers = get_board() & move_database->b_mask[pos];
+    moves = move_database->b_moves[pos][(blockers * magic_numbers->b_magic[pos]) >> (64 - magic_numbers->b_bits[pos])];
     check |= moves & (black.bishops | black.queens);
 
     //If check is 0 the king is not attacked
@@ -511,10 +513,10 @@ bool Board_State::white_king_attacked(){
 
 bool Board_State::king_attacked(){
     if (white_to_move){
-        return white_king_attacked();
+        return black_king_attacked();
     }
     else{
-        return black_king_attacked();
+        return white_king_attacked();
     }
 }
 
@@ -572,11 +574,11 @@ void Board_State::make_move(uint_fast16_t move){
             else{
                 //Queenside
                 if (destination == 0x400000000000000){
-                    white.rooks = white.rooks ^ 0x900000000000000;
+                    black.rooks = black.rooks ^ 0x900000000000000;
                 }
                 //Kingside
                 else{
-                    white.rooks = white.rooks ^ 0xa000000000000000;
+                    black.rooks = black.rooks ^ 0xa000000000000000;
                 }
             }
         } 
@@ -598,6 +600,8 @@ void Board_State::make_move(uint_fast16_t move){
     }
     //update castling information
     set_castling_info();
+    white.set_all_pieces();
+    black.set_all_pieces();
 }
 
 bool Board_State::validate_move(uint_fast16_t move){
@@ -623,7 +627,7 @@ void Board_State::unmake_move(){
 void Board_State::add_piece_for_eval(std::vector<float>& ans,uint64_t piece,int start){
     int lsb;
     while(piece != 0){
-        lsb = ffsl(piece);
+        lsb = ffsl(piece) - 1;
         //Set the index of the vector to 1 if the piece is there
         ans[start + lsb] = 1;
         piece &= piece - 1;
@@ -678,10 +682,26 @@ void Board_State::get_board_for_eval(std::vector<float>& ans){
 // int main(){
 //     Magics* magic_numbers = Get_Magics();
 //     MoveData* move_database = get_move_data(magic_numbers);
-//     Board_State test("8/8/8/8/8/2K5/8/2r5" ,move_database,magic_numbers);
+//     Board_State test("7b/rk2PN2/1P4B1/p3P3/QR2N1P1/P3KP2/3P3P/2B1R3" ,move_database,magic_numbers);
 
-//     //test.white_to_move = false;
-//     std::cout << test.king_attacked() << std::endl;
+//     // test.white.bishops = 67108868ULL;
+//     // test.white.pawns = 4505867372316672ULL;
+//     // test.white.rooks = 33ULL;
+//     // test.white.knights = 576460752303423490ULL;
+//     // test.white.queens = 8796093022208ULL;
+//     // test.white.king = 8192ULL;
+
+//     // test.black.bishops = 17594333528064ULL;
+//     // test.black.pawns = 140741783322624ULL;
+//     // test.black.rooks = 9223372036854775808ULL;
+//     // test.black.knights = 4611967493404098560ULL;
+//     // test.black.queens = 0ULL;
+//     // test.black.king = 144115188075855872ULL;
+//     test.gen_moves();
+//     for (auto move : test.Moves){
+//         std::cout << move << std::endl;
+//     }
+//         //std::cout << test.king_attacked() << std::endl;
 // }
 
 //https://lichess.org/editor/2b2bnr/1ppPpp2/r5p1/p6p/1P6/PQ2P2N/3P1PPP/RNB1KBR1_w_-_-_0_1

@@ -1,5 +1,7 @@
 #include"magic.hpp"
 
+
+//In the actual code these are populated
 const uint64_t RMagic[64] = {
     0xa8002c000108020ULL,
     0x6c00049b0002001ULL,

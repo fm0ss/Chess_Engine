@@ -1,8 +1,4 @@
-import multiprocessing
-from tkinter import filedialog
 import tensorflow as tf
-from keras.utils.vis_utils import plot_model
-from keras.engine import input_layer
 from keras.models import Sequential
 from keras.layers import Dense
 import chess
@@ -114,12 +110,12 @@ gen = batch_generator(["Data/Positions/batch-out" + str(i) + ".csv" for i in ran
 
 
 #Path where checkpoints are stored
-#checkpoint_path = "Model/weights.ckpt"
+checkpoint_path = "Model/weights.ckpt"
 
 #Passed into model.fit so that the model saves each epoch at the checkpoint path
-#cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
-                                                #  save_weights_only=True,
-                                                #  verbose=1)
+cp_callback = tf.keras.callbacks.ModelCheckpoint(filepath=checkpoint_path,
+                                                 save_weights_only=True,
+                                                 verbose=1)
 
 #Training the model
 history = model.fit(
